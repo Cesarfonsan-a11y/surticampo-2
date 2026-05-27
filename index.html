@@ -153,6 +153,7 @@ input:focus, select:focus { border-color: var(--green2); box-shadow: 0 0 0 3px r
   <button class="nav-btn" onclick="goTo('deudas',this)">Deudas</button>
   <button class="nav-btn" onclick="goTo('proyecciones',this)">Proyecciones</button>
   <button class="nav-btn" onclick="goTo('reportes',this)">Reportes</button>
+  <button class="nav-btn" onclick="goTo('crm',this)">🔔 CRM</button>
 </nav>
 
 <div class="main">
@@ -233,7 +234,24 @@ input:focus, select:focus { border-color: var(--green2); box-shadow: 0 0 0 3px r
       <div class="form-group"><label>Total</label><input id="v-total" type="number" readonly style="background:var(--surface2)"></div>
       <div class="form-group"><label>Forma de Pago</label><select id="v-pago"><option value="Efectivo">Efectivo</option><option value="Crédito">Crédito</option></select></div>
       <div class="form-group"><label>Estado</label><select id="v-estado"><option value="Pagado">Pagado</option><option value="Pendiente">Pendiente</option></select></div>
-      <div class="form-group"><label>Cliente (opcional)</label><input id="v-cliente" placeholder="Nombre cliente"></div>
+      <div class="form-group"><label>Cliente</label>
+        <select id="v-cliente-sel" onchange="seleccionarClienteVenta()">
+          <option value="">-- Cliente existente --</option>
+          <option value="__nuevo__">+ Nuevo cliente</option>
+        </select>
+      </div>
+      <div class="form-group" id="v-cliente-nombre-wrap"><label>Nombre cliente</label><input id="v-cliente" placeholder="Nombre completo"></div>
+      <div class="form-group" id="v-cliente-tel-wrap"><label>Teléfono</label><input id="v-cliente-tel" placeholder="Ej: 3001234567"></div>
+      <div class="form-group"><label>¿Cada cuántos días repite compra?</label>
+        <select id="v-ciclo">
+          <option value="15">15 días — concentrado mascotas</option>
+          <option value="30" selected>30 días — medicamentos / sal</option>
+          <option value="45">45 días — suplementos</option>
+          <option value="60">60 días — fertilizantes / agro</option>
+          <option value="90">90 días — insumos grandes</option>
+          <option value="0">No programar alerta</option>
+        </select>
+      </div>
     </div>
     <div class="form-actions"><button class="btn btn-primary" onclick="guardarVenta()">💾 Registrar Venta</button></div>
   </div>
@@ -366,6 +384,59 @@ input:focus, select:focus { border-color: var(--green2); box-shadow: 0 0 0 3px r
   </div>
 </div>
 
+<!-- CRM -->
+<div id="page-crm" class="page">
+  <h1 class="page-title">CRM — Clientes y Alertas</h1>
+
+  <!-- Aviso de almacenamiento -->
+  <div style="background:var(--blue-light);border:1px solid #b5d4f4;border-radius:var(--radius-lg);padding:12px 16px;margin-bottom:16px;font-size:13px;color:var(--blue);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
+    <span>💾 Los datos se guardan en este navegador. Exporta el CSV regularmente como respaldo.</span>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+      <button class="btn btn-secondary btn-sm" onclick="exportarCSVClientes()">⬇ Exportar CSV clientes</button>
+      <button class="btn btn-secondary btn-sm" onclick="exportarCSVVentas()">⬇ Exportar CSV ventas</button>
+      <button class="btn btn-secondary btn-sm" onclick="exportarCSVTodo()">⬇ Exportar TODO</button>
+      <label class="btn btn-secondary btn-sm" style="cursor:pointer;">📂 Importar CSV <input type="file" id="crm-import-file" accept=".csv" style="display:none" onchange="importarCSVClientes(this)"></label>
+    </div>
+  </div>
+
+  <!-- Alertas activas -->
+  <div id="crm-alertas-wrap" style="margin-bottom:20px;"></div>
+
+  <!-- Formulario nuevo cliente -->
+  <div class="form-section">
+    <h3>👤 Registrar Cliente</h3>
+    <div class="form-grid">
+      <div class="form-group"><label>Nombre</label><input id="crm-nombre" placeholder="Nombre completo"></div>
+      <div class="form-group"><label>Teléfono</label><input id="crm-tel" placeholder="3001234567"></div>
+      <div class="form-group"><label>Dirección / Vereda</label><input id="crm-dir" placeholder="Vereda o barrio"></div>
+      <div class="form-group"><label>Ciclo de recompra (días)</label>
+        <select id="crm-ciclo">
+          <option value="15">15 días</option>
+          <option value="30" selected>30 días</option>
+          <option value="45">45 días</option>
+          <option value="60">60 días</option>
+          <option value="90">90 días</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Notas</label><input id="crm-notas" placeholder="Animales, productos preferidos..."></div>
+    </div>
+    <div class="form-actions"><button class="btn btn-primary" onclick="guardarCliente()">💾 Guardar Cliente</button></div>
+  </div>
+
+  <!-- Tabla clientes -->
+  <div class="table-wrap">
+    <div class="table-header">
+      <h3>Clientes registrados (<span id="crm-count">0</span>)</h3>
+      <div class="search-bar"><input id="crm-search" placeholder="Buscar..." oninput="renderCRM()"></div>
+    </div>
+    <div style="overflow-x:auto;">
+      <table><thead><tr>
+        <th>Cliente</th><th>Teléfono</th><th>Dirección</th><th>Último pedido</th><th>Próxima compra</th><th>Productos</th><th>Total comprado</th><th>Estado</th><th>Acciones</th>
+      </tr></thead><tbody id="crm-tbody"></tbody></table>
+    </div>
+  </div>
+</div>
+
 </div><!-- /main -->
 
 <!-- MODAL ABONO -->
@@ -444,19 +515,100 @@ const SEMILLA_INVENTARIO = [
   ["COMPLE BET ORAL 100 ML",8900,10000,6],["CONEJOS 2KG PESADO",3500,7000,20]
 ];
 
+// ==================== SEMILLAS HISTÓRICAS ====================
+const SEMILLA_VENTAS = [
+  {id:'v001',fecha:'2026-02-04',prodId:1,prodNombre:'VENTA DEL DÍA',cant:1,precio:146000,total:146000,pago:'Efectivo',estado:'Pagado',cliente:'Varios',costoProd:0},
+  {id:'v020',fecha:'2026-02-04',prodId:1,prodNombre:'VENTA DEL DÍA (crédito)',cant:1,precio:114000,total:114000,pago:'Crédito',estado:'Pendiente',cliente:'Cliente Feb 4',costoProd:0},
+  {id:'v002',fecha:'2026-02-05',prodId:1,prodNombre:'VENTA DEL DÍA',cant:1,precio:177500,total:177500,pago:'Efectivo',estado:'Pagado',cliente:'Varios',costoProd:0},
+  {id:'v003',fecha:'2026-02-06',prodId:1,prodNombre:'VENTA DEL DÍA',cant:1,precio:273000,total:273000,pago:'Efectivo',estado:'Pagado',cliente:'Varios',costoProd:0},
+  {id:'v004',fecha:'2026-02-07',prodId:1,prodNombre:'VENTA DEL DÍA',cant:1,precio:6000,total:6000,pago:'Efectivo',estado:'Pagado',cliente:'Varios',costoProd:0},
+  {id:'v005',fecha:'2026-02-09',prodId:1,prodNombre:'VENTA DEL DÍA',cant:1,precio:109000,total:109000,pago:'Efectivo',estado:'Pagado',cliente:'Varios',costoProd:0},
+  {id:'v006',fecha:'2026-02-10',prodId:1,prodNombre:'VENTA DEL DÍA',cant:1,precio:406500,total:406500,pago:'Efectivo',estado:'Pagado',cliente:'Varios',costoProd:0},
+  {id:'v007',fecha:'2026-02-11',prodId:1,prodNombre:'VENTA DEL DÍA',cant:1,precio:214500,total:214500,pago:'Efectivo',estado:'Pagado',cliente:'Varios',costoProd:0},
+  {id:'v008',fecha:'2026-02-12',prodId:1,prodNombre:'VENTA DEL DÍA',cant:1,precio:281500,total:281500,pago:'Efectivo',estado:'Pagado',cliente:'Varios',costoProd:0},
+  {id:'v009',fecha:'2026-02-13',prodId:1,prodNombre:'VENTA DEL DÍA',cant:1,precio:180500,total:180500,pago:'Efectivo',estado:'Pagado',cliente:'Varios',costoProd:0},
+  {id:'v010',fecha:'2026-02-14',prodId:1,prodNombre:'VENTA DEL DÍA',cant:1,precio:146500,total:146500,pago:'Efectivo',estado:'Pagado',cliente:'Varios',costoProd:0},
+  {id:'v011',fecha:'2026-02-16',prodId:1,prodNombre:'VENTA DEL DÍA',cant:1,precio:219000,total:219000,pago:'Efectivo',estado:'Pagado',cliente:'Varios',costoProd:0},
+  {id:'v012',fecha:'2026-02-17',prodId:1,prodNombre:'VENTA DEL DÍA',cant:1,precio:82500,total:82500,pago:'Efectivo',estado:'Pagado',cliente:'Varios',costoProd:0},
+  {id:'v013',fecha:'2026-02-17',prodId:1,prodNombre:'VENTA DEL DÍA (crédito)',cant:1,precio:120000,total:120000,pago:'Crédito',estado:'Pendiente',cliente:'Cliente Feb 17',costoProd:0},
+  {id:'v014',fecha:'2026-02-18',prodId:1,prodNombre:'VENTA DEL DÍA',cant:1,precio:205500,total:205500,pago:'Efectivo',estado:'Pagado',cliente:'Varios',costoProd:0},
+  {id:'v015',fecha:'2026-02-19',prodId:1,prodNombre:'VENTA DEL DÍA',cant:1,precio:480000,total:480000,pago:'Efectivo',estado:'Pagado',cliente:'Varios',costoProd:0},
+  {id:'v016',fecha:'2026-02-20',prodId:1,prodNombre:'VENTA DEL DÍA',cant:1,precio:323500,total:323500,pago:'Efectivo',estado:'Pagado',cliente:'Varios',costoProd:0},
+  {id:'v017',fecha:'2026-02-21',prodId:1,prodNombre:'VENTA DEL DÍA',cant:1,precio:136500,total:136500,pago:'Efectivo',estado:'Pagado',cliente:'Varios',costoProd:0},
+  {id:'v018',fecha:'2026-02-23',prodId:1,prodNombre:'VENTA DEL DÍA',cant:1,precio:228500,total:228500,pago:'Efectivo',estado:'Pagado',cliente:'Varios',costoProd:0},
+  {id:'v019',fecha:'2026-02-24',prodId:1,prodNombre:'VENTA DEL DÍA',cant:1,precio:614000,total:614000,pago:'Efectivo',estado:'Pagado',cliente:'Varios',costoProd:0},
+];
+
+const SEMILLA_GASTOS = [
+  {id:'g001',fecha:'2025-12-04',concepto:'Adecuación local - Eliangy Rangel',valor:175000,categoria:'Mantenimiento',pago:'Contado'},
+  {id:'g002',fecha:'2025-12-06',concepto:'Adecuación local - Eliangy Rangel',valor:125000,categoria:'Mantenimiento',pago:'Contado'},
+  {id:'g003',fecha:'2025-12-14',concepto:'Adecuación local - Eliangy Rangel',valor:150000,categoria:'Mantenimiento',pago:'Contado'},
+  {id:'g004',fecha:'2025-12-20',concepto:'Arriendo local diciembre',valor:500000,categoria:'Arriendo',pago:'Contado'},
+  {id:'g005',fecha:'2025-12-29',concepto:'Pago Dania Cortés',valor:120000,categoria:'Nómina',pago:'Contado'},
+  {id:'g006',fecha:'2025-12-30',concepto:'Formaleta',valor:250000,categoria:'Mantenimiento',pago:'Contado'},
+  {id:'g007',fecha:'2025-12-29',concepto:'Felipe pintor',valor:135000,categoria:'Mantenimiento',pago:'Contado'},
+  {id:'g008',fecha:'2026-01-16',concepto:'Victor Castro - instalación',valor:1740000,categoria:'Mantenimiento',pago:'Contado'},
+  {id:'g009',fecha:'2026-01-16',concepto:'DJ Sonido - instalación estanterías',valor:40000,categoria:'Mantenimiento',pago:'Contado'},
+  {id:'g010',fecha:'2026-01-16',concepto:'Trapero y útiles',valor:40000,categoria:'Otros',pago:'Contado'},
+  {id:'g011',fecha:'2026-01-17',concepto:'Arriendo local enero (cuota 1)',valor:250000,categoria:'Arriendo',pago:'Contado'},
+  {id:'g012',fecha:'2026-01-18',concepto:'Arriendo local enero (cuota 2)',valor:250000,categoria:'Arriendo',pago:'Contado'},
+  {id:'g013',fecha:'2026-01-17',concepto:'Diego - varios',valor:30000,categoria:'Otros',pago:'Contado'},
+  {id:'g014',fecha:'2026-01-17',concepto:'Santiago Pinilla',valor:60000,categoria:'Otros',pago:'Contado'},
+  {id:'g015',fecha:'2026-01-27',concepto:'Publicidad',valor:470000,categoria:'Publicidad',pago:'Contado'},
+  {id:'g016',fecha:'2026-01-27',concepto:'Señora - varios',valor:20000,categoria:'Otros',pago:'Contado'},
+  {id:'g017',fecha:'2026-01-27',concepto:'Papeles Cámara de Comercio',valor:110000,categoria:'Servicios',pago:'Contado'},
+  {id:'g018',fecha:'2026-01-27',concepto:'Papeles Cámara de Comercio 2',valor:110000,categoria:'Servicios',pago:'Contado'},
+  {id:'g019',fecha:'2026-01-27',concepto:'Pago banco constitución',valor:45000,categoria:'Servicios',pago:'Contado'},
+  {id:'g020',fecha:'2026-01-28',concepto:'Proyecciones / software',valor:500000,categoria:'Servicios',pago:'Contado'},
+  {id:'g021',fecha:'2026-01-29',concepto:'Impresora',valor:750000,categoria:'Otros',pago:'Contado'},
+  {id:'g022',fecha:'2026-02-11',concepto:'Gasto operativo feb 11',valor:100000,categoria:'Otros',pago:'Contado'},
+  {id:'g023',fecha:'2026-02-12',concepto:'Gasto operativo feb 12',valor:535000,categoria:'Otros',pago:'Contado'},
+  {id:'g024',fecha:'2026-02-18',concepto:'Gasto operativo feb 18',valor:100000,categoria:'Otros',pago:'Contado'},
+];
+
+const SEMILLA_COMPRAS = [
+  {id:'c001',fecha:'2026-01-23',prodNombre:'Gana Campo Rafael - pedido 1',cant:1,costoUnit:1286600,total:1286600,proveedor:'Gana Campo Rafael',pago:'Contado'},
+  {id:'c002',fecha:'2026-01-24',prodNombre:'Gana Campo Rafael - pedido 2',cant:1,costoUnit:587100,total:587100,proveedor:'Gana Campo Rafael',pago:'Contado'},
+  {id:'c003',fecha:'2026-01-23',prodNombre:'Proveedor 83117597 - pedido 1',cant:1,costoUnit:2671865,total:2671865,proveedor:'Proveedor 83117597',pago:'Contado'},
+  {id:'c004',fecha:'2026-01-23',prodNombre:'Proveedor 83117597 - pedido 2',cant:1,costoUnit:75000,total:75000,proveedor:'Proveedor 83117597',pago:'Contado'},
+  {id:'c005',fecha:'2026-01-23',prodNombre:'Proveedor 901875431 - pedido 1',cant:1,costoUnit:192000,total:192000,proveedor:'Proveedor 901875431',pago:'Contado'},
+  {id:'c006',fecha:'2026-01-28',prodNombre:'Proveedor 901875431 - pedido 2',cant:1,costoUnit:274000,total:274000,proveedor:'Proveedor 901875431',pago:'Contado'},
+  {id:'c007',fecha:'2026-01-29',prodNombre:'Proveedor 901875431 - pedido 3',cant:1,costoUnit:345000,total:345000,proveedor:'Proveedor 901875431',pago:'Contado'},
+  {id:'c008',fecha:'2026-01-29',prodNombre:'Proveedor 901875431 - pedido 4',cant:1,costoUnit:3129000,total:3129000,proveedor:'Proveedor 901875431',pago:'Contado'},
+  {id:'c009',fecha:'2026-01-29',prodNombre:'Proveedor 4095931',cant:1,costoUnit:2011500,total:2011500,proveedor:'Proveedor 4095931',pago:'Contado'},
+  {id:'c010',fecha:'2026-02-03',prodNombre:'Pedido feb 03 (1)',cant:1,costoUnit:180000,total:180000,proveedor:'Proveedor',pago:'Contado'},
+  {id:'c011',fecha:'2026-02-03',prodNombre:'Pedido feb 03 (2)',cant:1,costoUnit:1211500,total:1211500,proveedor:'Proveedor',pago:'Contado'},
+  {id:'c012',fecha:'2026-02-04',prodNombre:'Pedido feb 04',cant:1,costoUnit:518000,total:518000,proveedor:'Proveedor',pago:'Contado'},
+  {id:'c013',fecha:'2026-02-05',prodNombre:'Pedido feb 05 (1)',cant:1,costoUnit:68200,total:68200,proveedor:'Proveedor',pago:'Contado'},
+  {id:'c014',fecha:'2026-02-05',prodNombre:'Pedido feb 05 (2)',cant:1,costoUnit:15000,total:15000,proveedor:'Proveedor',pago:'Contado'},
+  {id:'c015',fecha:'2026-02-06',prodNombre:'Pedido feb 06 (1)',cant:1,costoUnit:79600,total:79600,proveedor:'Proveedor',pago:'Contado'},
+  {id:'c016',fecha:'2026-02-06',prodNombre:'Pedido feb 06 (2)',cant:1,costoUnit:256000,total:256000,proveedor:'Proveedor',pago:'Contado'},
+  {id:'c017',fecha:'2026-02-10',prodNombre:'Pedido feb 10',cant:1,costoUnit:31800,total:31800,proveedor:'Proveedor',pago:'Contado'},
+  {id:'c018',fecha:'2026-02-11',prodNombre:'Pedido feb 11',cant:1,costoUnit:525000,total:525000,proveedor:'Proveedor',pago:'Contado'},
+  {id:'c019',fecha:'2026-02-13',prodNombre:'Pedido feb 13',cant:1,costoUnit:187500,total:187500,proveedor:'Proveedor',pago:'Contado'},
+  {id:'c020',fecha:'2026-02-19',prodNombre:'Pedido feb 19',cant:1,costoUnit:150000,total:150000,proveedor:'Proveedor',pago:'Contado'},
+  {id:'c021',fecha:'2026-02-21',prodNombre:'Pedido feb 21 (1)',cant:1,costoUnit:589500,total:589500,proveedor:'Proveedor',pago:'Contado'},
+  {id:'c022',fecha:'2026-02-21',prodNombre:'Pedido feb 21 (2)',cant:1,costoUnit:63600,total:63600,proveedor:'Proveedor',pago:'Contado'},
+  {id:'c023',fecha:'2026-02-21',prodNombre:'Pedido feb 21 (3)',cant:1,costoUnit:370000,total:370000,proveedor:'Proveedor',pago:'Contado'},
+];
+
 // ==================== STATE ====================
-let inventario, ventas, gastos, compras, deudasClientes, deudasProveedores, saldoCaja, historial;
+let inventario, ventas, gastos, compras, deudasClientes, deudasProveedores, saldoCaja, historial, clientes;
 
 function cargarDatos() {
   const inv = localStorage.getItem('inventario');
   inventario = inv ? JSON.parse(inv) : SEMILLA_INVENTARIO.map((p,i) => ({ id: i+1, nombre: p[0], costo: p[1], venta: p[2], cantidad: p[3] }));
-  ventas = JSON.parse(localStorage.getItem('ventas') || '[]');
-  gastos = JSON.parse(localStorage.getItem('gastos') || '[]');
-  compras = JSON.parse(localStorage.getItem('compras') || '[]');
-  deudasClientes = JSON.parse(localStorage.getItem('deudasClientes') || '[]');
+  ventas = JSON.parse(localStorage.getItem('ventas') || 'null') || SEMILLA_VENTAS;
+  gastos = JSON.parse(localStorage.getItem('gastos') || 'null') || SEMILLA_GASTOS;
+  compras = JSON.parse(localStorage.getItem('compras') || 'null') || SEMILLA_COMPRAS;
+  deudasClientes = JSON.parse(localStorage.getItem('deudasClientes') || 'null') || [
+    {id:'dc001',fecha:'2026-02-04',cliente:'Cliente Feb 4',prodNombre:'VENTA DEL DÍA (crédito)',total:114000,saldo:114000,ventaId:'v020'},
+    {id:'dc002',fecha:'2026-02-17',cliente:'Cliente Feb 17',prodNombre:'VENTA DEL DÍA (crédito)',total:120000,saldo:120000,ventaId:'v013'},
+  ];
   deudasProveedores = JSON.parse(localStorage.getItem('deudasProveedores') || '[]');
   saldoCaja = parseFloat(localStorage.getItem('saldoCaja') || '5000000');
   historial = JSON.parse(localStorage.getItem('historial') || '[]');
+  clientes = JSON.parse(localStorage.getItem('clientes') || '[]');
 }
 
 function guardarTodo() {
@@ -468,6 +620,7 @@ function guardarTodo() {
   localStorage.setItem('deudasProveedores', JSON.stringify(deudasProveedores));
   localStorage.setItem('saldoCaja', saldoCaja);
   localStorage.setItem('historial', JSON.stringify(historial));
+  localStorage.setItem('clientes', JSON.stringify(clientes));
 }
 
 const fmt = v => '$' + Math.round(v || 0).toLocaleString('es-CO');
@@ -482,11 +635,12 @@ function goTo(id, btn) {
   btn.classList.add('active');
   if (id === 'dashboard') renderDashboard();
   if (id === 'inventario') renderInventario();
-  if (id === 'ventas') { renderVentas(); poblarSelectProductos(); }
+  if (id === 'ventas') { renderVentas(); poblarSelectProductos(); poblarSelectClientes(); }
   if (id === 'compras') { renderCompras(); poblarSelectProductos('c-prod'); }
   if (id === 'gastos') renderGastos();
   if (id === 'deudas') renderDeudas();
   if (id === 'proyecciones') renderProyeccion();
+  if (id === 'crm') renderCRM();
 }
 
 // ==================== DASHBOARD ====================
@@ -645,14 +799,26 @@ function guardarProducto() {
   const costo = parseFloat(document.getElementById('inv-costo').value);
   const venta = parseFloat(document.getElementById('inv-venta').value);
   const cantidad = parseFloat(document.getElementById('inv-cant').value);
-  if (!nombre || isNaN(costo) || isNaN(venta) || isNaN(cantidad)) return alert('Completa todos los campos');
+
+  if (!nombre) return alert('❌ Escribe el nombre del producto');
+  if (isNaN(costo) || costo < 0) return alert('❌ Ingresa el precio de costo');
+  if (isNaN(venta) || venta < 0) return alert('❌ Ingresa el precio de venta');
+  if (isNaN(cantidad) || cantidad < 0) return alert('❌ Ingresa la cantidad');
+  if (venta < costo) { if (!confirm('⚠️ El precio de venta es menor al costo. ¿Continuar?')) return; }
+
   if (id) {
     const p = inventario.find(x => x.id == id);
-    Object.assign(p, { nombre, costo, venta, cantidad });
+    if (p) Object.assign(p, { nombre, costo, venta, cantidad });
   } else {
+    const yaExiste = inventario.find(p => p.nombre === nombre);
+    if (yaExiste) { if (!confirm('Ya existe "' + nombre + '". ¿Agregar como nuevo de todas formas?')) return; }
     inventario.push({ id: uid(), nombre, costo, venta, cantidad });
   }
   cancelarEditInv(); guardarTodo(); renderInventario();
+
+  // Feedback visual
+  const btn = document.querySelector('[onclick="guardarProducto()"]');
+  if (btn) { const orig = btn.textContent; btn.textContent = '✅ Guardado'; setTimeout(() => btn.textContent = orig, 1500); }
 }
 
 function editarProducto(id) {
@@ -696,6 +862,28 @@ function calcVenta() {
   document.getElementById('v-total').value = cant * precio;
 }
 
+function seleccionarClienteVenta() {
+  const sel = document.getElementById('v-cliente-sel').value;
+  if (sel && sel !== '__nuevo__') {
+    const c = clientes.find(x => x.id === sel);
+    if (c) {
+      document.getElementById('v-cliente').value = c.nombre;
+      document.getElementById('v-cliente-tel').value = c.telefono || '';
+      document.getElementById('v-ciclo').value = c.ciclo || 30;
+    }
+  } else {
+    document.getElementById('v-cliente').value = '';
+    document.getElementById('v-cliente-tel').value = '';
+  }
+}
+
+function poblarSelectClientes() {
+  const sel = document.getElementById('v-cliente-sel');
+  if (!sel) return;
+  sel.innerHTML = '<option value="">-- Cliente existente --</option><option value="__nuevo__">+ Nuevo cliente</option>'
+    + clientes.map(c => `<option value="${c.id}">${c.nombre}${c.telefono ? ' — ' + c.telefono : ''}</option>`).join('');
+}
+
 function guardarVenta() {
   const fecha = document.getElementById('v-fecha').value || today();
   const prodId = document.getElementById('v-prod').value;
@@ -704,24 +892,54 @@ function guardarVenta() {
   const total = cant * precio;
   const pago = document.getElementById('v-pago').value;
   const estado = document.getElementById('v-estado').value;
-  const cliente = document.getElementById('v-cliente').value || 'Sin nombre';
+  const nombreCliente = document.getElementById('v-cliente').value || 'Varios';
+  const telCliente = document.getElementById('v-cliente-tel').value || '';
+  const ciclo = parseInt(document.getElementById('v-ciclo').value) || 30;
   if (!prodId || !cant || !precio) return alert('Completa todos los campos');
   const prod = inventario.find(p => p.id == prodId);
   if (!prod) return alert('Producto no encontrado');
   if (prod.cantidad < cant) return alert('Stock insuficiente: ' + prod.cantidad + ' disponibles');
 
   prod.cantidad -= cant;
-  const venta = { id: uid(), fecha, prodId, prodNombre: prod.nombre, cant, precio, total, pago, estado, cliente, costoProd: prod.costo };
+
+  // Registrar o actualizar cliente en CRM
+  let clienteId = document.getElementById('v-cliente-sel').value;
+  if (ciclo > 0 && nombreCliente !== 'Varios') {
+    if (!clienteId || clienteId === '__nuevo__') {
+      // Buscar si ya existe por nombre
+      let existing = clientes.find(c => c.nombre.toLowerCase() === nombreCliente.toLowerCase());
+      if (existing) {
+        clienteId = existing.id;
+      } else {
+        clienteId = uid();
+        clientes.push({ id: clienteId, nombre: nombreCliente, telefono: telCliente, direccion: '', ciclo, notas: '', ultimaCompra: fecha, proximaCompra: sumarDias(fecha, ciclo), productos: [prod.nombre], totalComprado: total });
+      }
+    }
+    // Actualizar datos del cliente
+    const c = clientes.find(x => x.id === clienteId);
+    if (c) {
+      c.ultimaCompra = fecha;
+      c.proximaCompra = sumarDias(fecha, ciclo);
+      c.ciclo = ciclo;
+      if (telCliente) c.telefono = telCliente;
+      if (!c.productos) c.productos = [];
+      if (!c.productos.includes(prod.nombre)) c.productos.push(prod.nombre);
+      c.totalComprado = (c.totalComprado || 0) + total;
+    }
+  }
+
+  const venta = { id: uid(), fecha, prodId, prodNombre: prod.nombre, cant, precio, total, pago, estado, cliente: nombreCliente, clienteId, costoProd: prod.costo };
   ventas.push(venta);
 
   if (estado === 'Pagado') {
     saldoCaja += total;
     historial.push({ fecha, tipo: 'venta', desc: 'Venta: ' + prod.nombre, valor: total, saldoDespues: saldoCaja });
   } else {
-    deudasClientes.push({ id: uid(), fecha, cliente, prodNombre: prod.nombre, total, saldo: total, ventaId: venta.id });
+    deudasClientes.push({ id: uid(), fecha, cliente: nombreCliente, prodNombre: prod.nombre, total, saldo: total, ventaId: venta.id });
   }
-  guardarTodo(); renderVentas(); renderDashboard();
-  ['v-prod','v-cant','v-precio','v-total','v-cliente'].forEach(id => { const el = document.getElementById(id); if (el) el.value = id === 'v-cant' ? 1 : ''; });
+  guardarTodo(); renderVentas();
+  ['v-prod','v-cant','v-precio','v-total','v-cliente','v-cliente-tel'].forEach(id => { const el = document.getElementById(id); if (el) el.value = id === 'v-cant' ? 1 : ''; });
+  document.getElementById('v-cliente-sel').value = '';
 }
 
 function renderVentas() {
@@ -1154,7 +1372,204 @@ function exportarCSV() {
   a.click();
 }
 
-// ==================== INIT ====================
+// ==================== CRM ====================
+function sumarDias(fecha, dias) {
+  const d = new Date(fecha); d.setDate(d.getDate() + parseInt(dias));
+  return d.toISOString().slice(0,10);
+}
+
+function diasParaProximaCompra(proximaCompra) {
+  const hoy = new Date(); hoy.setHours(0,0,0,0);
+  const prox = new Date(proximaCompra);
+  return Math.round((prox - hoy) / 864e5);
+}
+
+function guardarCliente() {
+  const nombre = document.getElementById('crm-nombre').value.trim();
+  const tel = document.getElementById('crm-tel').value.trim();
+  const dir = document.getElementById('crm-dir').value.trim();
+  const ciclo = parseInt(document.getElementById('crm-ciclo').value);
+  const notas = document.getElementById('crm-notas').value.trim();
+  if (!nombre) return alert('Ingresa el nombre del cliente');
+  clientes.push({ id: uid(), nombre, telefono: tel, direccion: dir, ciclo, notas, ultimaCompra: null, proximaCompra: null, productos: [], totalComprado: 0 });
+  guardarTodo(); renderCRM(); poblarSelectClientes();
+  ['crm-nombre','crm-tel','crm-dir','crm-notas'].forEach(id => document.getElementById(id).value = '');
+}
+
+function editarCiclo(id) {
+  const c = clientes.find(x => x.id === id);
+  if (!c) return;
+  const nuevo = prompt(`Ciclo de recompra actual: ${c.ciclo} días\nIngresa el nuevo ciclo en días:`, c.ciclo);
+  if (nuevo && !isNaN(nuevo)) {
+    c.ciclo = parseInt(nuevo);
+    if (c.ultimaCompra) c.proximaCompra = sumarDias(c.ultimaCompra, c.ciclo);
+    guardarTodo(); renderCRM();
+  }
+}
+
+function eliminarCliente(id) {
+  if (!confirm('¿Eliminar este cliente?')) return;
+  clientes = clientes.filter(c => c.id !== id);
+  guardarTodo(); renderCRM();
+}
+
+function renderCRM() {
+  const hoy = today();
+  const alertas = clientes.filter(c => c.proximaCompra && c.proximaCompra <= hoy);
+  const proximos = clientes.filter(c => c.proximaCompra && c.proximaCompra > hoy && diasParaProximaCompra(c.proximaCompra) <= 7);
+
+  // Alertas
+  const wrap = document.getElementById('crm-alertas-wrap');
+  if (alertas.length || proximos.length) {
+    wrap.innerHTML = `
+      ${alertas.length ? `<div style="background:#fdf0ee;border:1px solid #f5c6c0;border-radius:var(--radius-lg);padding:14px 16px;margin-bottom:12px;">
+        <div style="font-weight:500;color:#c0392b;font-size:14px;margin-bottom:10px;">🔴 ${alertas.length} cliente${alertas.length>1?'s':''} listo${alertas.length>1?'s':''} para llamar</div>
+        ${alertas.map(c => `
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:0.5px solid #f5c6c0;font-size:13px;">
+            <div><b>${c.nombre}</b> — ${c.telefono || 'sin tel'} — ${(c.productos||[]).slice(-2).join(', ')}</div>
+            <div style="display:flex;gap:6px;">
+              ${c.telefono ? `<a href="tel:${c.telefono}" class="btn btn-primary btn-sm">📞 Llamar</a>` : ''}
+              <button class="btn btn-secondary btn-sm" onclick="marcarLlamado('${c.id}')">✓ Llamado</button>
+            </div>
+          </div>`).join('')}
+      </div>` : ''}
+      ${proximos.length ? `<div style="background:#fef8ec;border:1px solid #f5d99a;border-radius:var(--radius-lg);padding:14px 16px;margin-bottom:12px;">
+        <div style="font-weight:500;color:#b8770a;font-size:14px;margin-bottom:10px;">🟡 ${proximos.length} cliente${proximos.length>1?'s':''} por vencer esta semana</div>
+        ${proximos.map(c => `<div style="font-size:13px;padding:5px 0;border-bottom:0.5px solid #f5d99a;"><b>${c.nombre}</b> — en ${diasParaProximaCompra(c.proximaCompra)} días — ${c.telefono || 'sin tel'}</div>`).join('')}
+      </div>` : ''}`;
+  } else {
+    wrap.innerHTML = `<div style="background:var(--green-light);border:1px solid #b8dda0;border-radius:var(--radius-lg);padding:12px 16px;font-size:13px;color:var(--green);margin-bottom:12px;">✅ Sin alertas pendientes</div>`;
+  }
+
+  // Tabla
+  const q = (document.getElementById('crm-search').value || '').toLowerCase();
+  const lista = clientes.filter(c => c.nombre.toLowerCase().includes(q) || (c.telefono||'').includes(q));
+  document.getElementById('crm-count').textContent = lista.length;
+
+  document.getElementById('crm-tbody').innerHTML = lista.length ? lista.map(c => {
+    const diasRestantes = c.proximaCompra ? diasParaProximaCompra(c.proximaCompra) : null;
+    let estadoBadge = '<span class="badge badge-blue">Sin historial</span>';
+    if (diasRestantes !== null) {
+      if (diasRestantes < 0) estadoBadge = `<span class="badge badge-red">Vencido ${Math.abs(diasRestantes)}d</span>`;
+      else if (diasRestantes <= 7) estadoBadge = `<span class="badge badge-amber">En ${diasRestantes}d</span>`;
+      else estadoBadge = `<span class="badge badge-green">En ${diasRestantes}d</span>`;
+    }
+    return `<tr>
+      <td><b>${c.nombre}</b>${c.direccion ? '<br><small style="color:var(--text3)">' + c.direccion + '</small>' : ''}</td>
+      <td>${c.telefono ? `<a href="tel:${c.telefono}" style="color:var(--green)">${c.telefono}</a>` : '—'}</td>
+      <td style="font-size:12px;color:var(--text2)">${c.direccion || '—'}</td>
+      <td>${c.ultimaCompra || '—'}</td>
+      <td>${c.proximaCompra || '—'}</td>
+      <td style="font-size:11px;max-width:160px;">${(c.productos||[]).slice(-3).join(', ') || '—'}</td>
+      <td class="num">${fmt(c.totalComprado||0)}</td>
+      <td>${estadoBadge}</td>
+      <td>
+        <button class="btn btn-secondary btn-sm" onclick="editarCiclo('${c.id}')">⏱ Ciclo</button>
+        <button class="btn btn-danger btn-sm" onclick="eliminarCliente('${c.id}')">🗑</button>
+      </td>
+    </tr>`;
+  }).join('') : '<tr><td colspan="9" style="text-align:center;color:var(--text3);padding:20px;">Sin clientes registrados</td></tr>';
+}
+
+function marcarLlamado(id) {
+  const c = clientes.find(x => x.id === id);
+  if (!c) return;
+  c.proximaCompra = sumarDias(today(), c.ciclo);
+  guardarTodo(); renderCRM();
+}
+
+// ==================== EXPORTAR / IMPORTAR CSV ====================
+function descargarCSV(nombre, filas) {
+  const csv = filas.map(r => r.map(c => '"' + String(c||'').replace(/"/g,'""') + '"').join(',')).join('\n');
+  const a = document.createElement('a');
+  a.href = 'data:text/csv;charset=utf-8,\uFEFF' + encodeURIComponent(csv);
+  a.download = nombre + '_' + today() + '.csv';
+  a.click();
+}
+
+function exportarCSVClientes() {
+  if (!clientes.length) return alert('No hay clientes registrados aún');
+  const filas = [
+    ['ID','Nombre','Teléfono','Dirección','Ciclo (días)','Última compra','Próxima compra','Productos','Total comprado','Notas'],
+    ...clientes.map(c => [c.id, c.nombre, c.telefono||'', c.direccion||'', c.ciclo, c.ultimaCompra||'', c.proximaCompra||'', (c.productos||[]).join(' | '), c.totalComprado||0, c.notas||''])
+  ];
+  descargarCSV('surticampo_clientes', filas);
+}
+
+function exportarCSVVentas() {
+  if (!ventas.length) return alert('No hay ventas registradas');
+  const filas = [
+    ['Fecha','Producto','Cantidad','Precio unitario','Total','Forma de pago','Estado','Cliente'],
+    ...ventas.map(v => [v.fecha, v.prodNombre, v.cant, v.precio, v.total, v.pago, v.estado, v.cliente])
+  ];
+  descargarCSV('surticampo_ventas', filas);
+}
+
+function exportarCSVTodo() {
+  const sep = ['---','---','---','---','---','---','---','---','---','---'];
+  const filas = [
+    ['=== SURTICAMPO OCCIDENTE — BACKUP ' + today() + ' ==='],
+    sep,
+    ['=== CLIENTES ==='],
+    ['ID','Nombre','Teléfono','Dirección','Ciclo','Última compra','Próxima compra','Productos','Total comprado','Notas'],
+    ...clientes.map(c => [c.id, c.nombre, c.telefono||'', c.direccion||'', c.ciclo, c.ultimaCompra||'', c.proximaCompra||'', (c.productos||[]).join(' | '), c.totalComprado||0, c.notas||'']),
+    sep,
+    ['=== VENTAS ==='],
+    ['Fecha','Producto','Cantidad','Precio','Total','Pago','Estado','Cliente'],
+    ...ventas.map(v => [v.fecha, v.prodNombre, v.cant, v.precio, v.total, v.pago, v.estado, v.cliente]),
+    sep,
+    ['=== GASTOS ==='],
+    ['Fecha','Concepto','Categoría','Valor','Pago'],
+    ...gastos.map(g => [g.fecha, g.concepto, g.categoria, g.valor, g.pago]),
+    sep,
+    ['=== COMPRAS ==='],
+    ['Fecha','Producto','Cantidad','Costo unit.','Total','Proveedor','Pago'],
+    ...compras.map(c => [c.fecha, c.prodNombre, c.cant, c.costoUnit, c.total, c.proveedor, c.pago]),
+    sep,
+    ['=== DEUDAS CLIENTES ==='],
+    ['Fecha','Cliente','Producto','Total original','Saldo pendiente'],
+    ...deudasClientes.filter(d => d.saldo > 0).map(d => [d.fecha, d.cliente, d.prodNombre, d.total, d.saldo]),
+    sep,
+    ['=== INVENTARIO ==='],
+    ['Producto','Precio costo','Precio venta','Cantidad','Margen %'],
+    ...inventario.map(p => [p.nombre, p.costo, p.venta, p.cantidad, p.costo > 0 ? +((p.venta-p.costo)/p.costo*100).toFixed(1) : 0]),
+  ];
+  descargarCSV('surticampo_backup_completo', filas);
+}
+
+function importarCSVClientes(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const lines = e.target.result.split('\n').slice(1).filter(l => l.trim());
+    let importados = 0, omitidos = 0;
+    lines.forEach(line => {
+      const cols = line.split(',').map(c => c.replace(/^"|"$/g,'').replace(/""/g,'"').trim());
+      if (!cols[1]) return;
+      const existe = clientes.find(c => c.nombre.toLowerCase() === cols[1].toLowerCase());
+      if (existe) { omitidos++; return; }
+      clientes.push({
+        id: cols[0] || uid(),
+        nombre: cols[1],
+        telefono: cols[2] || '',
+        direccion: cols[3] || '',
+        ciclo: parseInt(cols[4]) || 30,
+        ultimaCompra: cols[5] || null,
+        proximaCompra: cols[6] || null,
+        productos: cols[7] ? cols[7].split(' | ') : [],
+        totalComprado: parseFloat(cols[8]) || 0,
+        notas: cols[9] || ''
+      });
+      importados++;
+    });
+    guardarTodo(); renderCRM(); poblarSelectClientes();
+    alert('✅ Importados: ' + importados + '\n⚠️ Omitidos (ya existían): ' + omitidos);
+    input.value = '';
+  };
+  reader.readAsText(file, 'UTF-8');
+}
+
 function init() {
   cargarDatos();
   const mes = new Date().getMonth();
