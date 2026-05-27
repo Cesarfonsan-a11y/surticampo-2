@@ -159,7 +159,21 @@ input:focus, select:focus { border-color: var(--green2); box-shadow: 0 0 0 3px r
 
 <!-- DASHBOARD -->
 <div id="page-dashboard" class="page active">
-  <h1 class="page-title">Dashboard</h1>
+  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:20px;">
+    <h1 style="font-size:22px;color:var(--green);margin:0;">Dashboard</h1>
+    <div style="display:flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:8px 14px;box-shadow:var(--shadow);">
+      <span style="font-size:12px;color:var(--text2);font-weight:500;">📅 Período:</span>
+      <select id="dash-mes" onchange="renderDashboard()" style="border:none;background:transparent;font-size:13px;font-weight:500;color:var(--text);outline:none;cursor:pointer;">
+        <option value="0">Enero</option><option value="1">Febrero</option><option value="2">Marzo</option>
+        <option value="3">Abril</option><option value="4">Mayo</option><option value="5">Junio</option>
+        <option value="6">Julio</option><option value="7">Agosto</option><option value="8">Septiembre</option>
+        <option value="9">Octubre</option><option value="10">Noviembre</option><option value="11">Diciembre</option>
+        <option value="all">Todo el año</option>
+      </select>
+      <input id="dash-anio" type="number" value="2026" onchange="renderDashboard()" style="border:none;background:transparent;font-size:13px;font-weight:500;color:var(--text);outline:none;width:60px;cursor:pointer;">
+    </div>
+  </div>
+  <div id="dash-periodo-label" style="font-size:12px;color:var(--text3);margin-bottom:12px;"></div>
   <div class="cards" id="dash-cards"></div>
   <div class="saldo-edit" style="margin-bottom:16px;">
     <label style="font-size:12px;color:var(--text2);">Ajustar saldo caja:</label>
@@ -167,7 +181,7 @@ input:focus, select:focus { border-color: var(--green2); box-shadow: 0 0 0 3px r
     <button class="btn btn-secondary btn-sm" onclick="ajustarSaldo()">Aplicar</button>
   </div>
   <div class="charts-grid">
-    <div class="chart-card"><h3>Ventas últimos 30 días</h3><div class="chart-wrap"><canvas id="chart-ventas-diarias"></canvas></div></div>
+    <div class="chart-card"><h3 id="chart-ventas-titulo">Ventas del mes</h3><div class="chart-wrap"><canvas id="chart-ventas-diarias"></canvas></div></div>
     <div class="chart-card"><h3>Gastos por categoría</h3><div class="chart-wrap"><canvas id="chart-gastos-cat"></canvas></div></div>
     <div class="chart-card" style="grid-column:1/-1;"><h3>Evolución del saldo de caja</h3><div class="chart-wrap"><canvas id="chart-saldo"></canvas></div></div>
   </div>
@@ -478,27 +492,55 @@ function goTo(id, btn) {
 // ==================== DASHBOARD ====================
 let chartVentasDiarias, chartGastosCat, chartSaldo;
 
+function getPrefixFiltro() {
+  const mes = document.getElementById('dash-mes') ? document.getElementById('dash-mes').value : 'all';
+  const anio = document.getElementById('dash-anio') ? document.getElementById('dash-anio').value : new Date().getFullYear();
+  if (mes === 'all') return { prefix: String(anio), label: 'Año ' + anio };
+  const m = String(parseInt(mes)+1).padStart(2,'0');
+  const meses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  return { prefix: `${anio}-${m}`, label: meses[parseInt(mes)] + ' ' + anio };
+}
+
 function renderDashboard() {
+  const { prefix, label } = getPrefixFiltro();
+
   const valCosto = inventario.reduce((a, p) => a + p.costo * p.cantidad, 0);
   const valVenta = inventario.reduce((a, p) => a + p.venta * p.cantidad, 0);
   const ganEsperada = valVenta - valCosto;
-  const totalVentas = ventas.filter(v => v.estado === 'Pagado').reduce((a, v) => a + v.total, 0);
-  const totalGastos = gastos.reduce((a, g) => a + g.valor, 0);
+
+  const ventasFiltradas = ventas.filter(v => v.fecha.startsWith(prefix));
+  const gastosFiltrados = gastos.filter(g => g.fecha.startsWith(prefix));
+  const comprasFiltradas = compras.filter(c => c.fecha.startsWith(prefix));
+
+  const totalVentas = ventasFiltradas.filter(v => v.estado === 'Pagado').reduce((a, v) => a + v.total, 0);
+  const ventasPendientes = ventasFiltradas.filter(v => v.estado === 'Pendiente').reduce((a, v) => a + v.total, 0);
+  const totalGastos = gastosFiltrados.reduce((a, g) => a + g.valor, 0);
+  const totalCompras = comprasFiltradas.reduce((a, c) => a + c.total, 0);
+  const costoVendido = ventasFiltradas.reduce((a, v) => a + (v.costoProd || 0) * v.cant, 0);
+  const utilBruta = totalVentas - costoVendido;
+  const utilNeta = utilBruta - totalGastos;
   const deudaClientes = deudasClientes.reduce((a, d) => a + d.saldo, 0);
   const deudaProveedores = deudasProveedores.reduce((a, d) => a + d.saldo, 0);
 
+  const el = document.getElementById('dash-periodo-label');
+  if (el) el.textContent = 'Mostrando datos de: ' + label + ' — ' + ventasFiltradas.length + ' ventas, ' + gastosFiltrados.length + ' gastos';
+
   const cards = [
-    { label: 'Inventario (costo)', val: fmt(valCosto), cls: '' },
-    { label: 'Val. venta potencial', val: fmt(valVenta), cls: 'green' },
-    { label: 'Ganancia potencial', val: fmt(ganEsperada), cls: 'green' },
-    { label: 'Ventas cobradas', val: fmt(totalVentas), cls: 'green' },
-    { label: 'Gastos totales', val: fmt(totalGastos), cls: 'red' },
-    { label: 'Saldo de caja', val: fmt(saldoCaja), cls: saldoCaja >= 0 ? 'green' : 'red' },
-    { label: 'Cartera clientes', val: fmt(deudaClientes), cls: 'amber' },
-    { label: 'Deuda proveedores', val: fmt(deudaProveedores), cls: 'red' },
+    { label: 'Inventario actual (costo)', val: fmt(valCosto), cls: '', sub: 'Stock total' },
+    { label: 'Ventas cobradas', val: fmt(totalVentas), cls: 'green', sub: ventasFiltradas.filter(v=>v.estado==='Pagado').length + ' transacciones' },
+    { label: 'Ventas pendientes', val: fmt(ventasPendientes), cls: 'amber', sub: ventasFiltradas.filter(v=>v.estado==='Pendiente').length + ' por cobrar' },
+    { label: 'Costo de lo vendido', val: fmt(costoVendido), cls: '', sub: 'Costo directo' },
+    { label: 'Utilidad bruta', val: fmt(utilBruta), cls: utilBruta >= 0 ? 'green' : 'red', sub: totalVentas > 0 ? ((utilBruta/totalVentas)*100).toFixed(1)+'% margen' : '—' },
+    { label: 'Gastos operativos', val: fmt(totalGastos), cls: 'red', sub: gastosFiltrados.length + ' registros' },
+    { label: 'Utilidad neta', val: fmt(utilNeta), cls: utilNeta >= 0 ? 'green' : 'red', sub: 'Bruta − gastos' },
+    { label: 'Compras inventario', val: fmt(totalCompras), cls: '', sub: comprasFiltradas.length + ' pedidos' },
+    { label: 'Saldo de caja', val: fmt(saldoCaja), cls: saldoCaja >= 0 ? 'green' : 'red', sub: 'Saldo actual' },
+    { label: 'Cartera clientes', val: fmt(deudaClientes), cls: 'amber', sub: 'Total pendiente' },
+    { label: 'Deuda proveedores', val: fmt(deudaProveedores), cls: 'red', sub: 'Total por pagar' },
+    { label: 'Ganancia potencial inv.', val: fmt(ganEsperada), cls: 'green', sub: 'Si se vende todo' },
   ];
   document.getElementById('dash-cards').innerHTML = cards.map(c =>
-    `<div class="card"><div class="card-label">${c.label}</div><div class="card-value ${c.cls}">${c.val}</div></div>`
+    `<div class="card"><div class="card-label">${c.label}</div><div class="card-value ${c.cls}">${c.val}</div><div class="card-sub">${c.sub}</div></div>`
   ).join('');
   document.getElementById('saldo-input').value = Math.round(saldoCaja);
 
@@ -508,29 +550,50 @@ function renderDashboard() {
 }
 
 function renderChartVentasDiarias() {
-  const ultimos30 = [];
-  for (let i = 29; i >= 0; i--) {
-    const d = new Date(); d.setDate(d.getDate() - i);
-    ultimos30.push(d.toISOString().slice(0,10));
+  const { prefix, label } = getPrefixFiltro();
+  const el = document.getElementById('chart-ventas-titulo');
+  if (el) el.textContent = 'Ventas — ' + label;
+
+  const mes = document.getElementById('dash-mes').value;
+  const anio = parseInt(document.getElementById('dash-anio').value);
+  let dias = [], labels = [];
+
+  if (mes === 'all') {
+    // Por mes del año
+    for (let m = 0; m < 12; m++) {
+      const p = `${anio}-${String(m+1).padStart(2,'0')}`;
+      dias.push(ventas.filter(v => v.fecha.startsWith(p)).reduce((a,v) => a+v.total, 0));
+    }
+    labels = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  } else {
+    // Por día del mes
+    const diasEnMes = new Date(anio, parseInt(mes)+1, 0).getDate();
+    for (let d = 1; d <= diasEnMes; d++) {
+      const dia = `${anio}-${String(parseInt(mes)+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+      dias.push(ventas.filter(v => v.fecha === dia).reduce((a,v) => a+v.total, 0));
+      labels.push(String(d));
+    }
   }
-  const data = ultimos30.map(dia => ventas.filter(v => v.fecha === dia).reduce((a, v) => a + v.total, 0));
+
   const ctx = document.getElementById('chart-ventas-diarias').getContext('2d');
   if (chartVentasDiarias) chartVentasDiarias.destroy();
   chartVentasDiarias = new Chart(ctx, {
     type: 'bar',
-    data: { labels: ultimos30.map(d => d.slice(5)), datasets: [{ label: 'Ventas', data, backgroundColor: '#5a9a30aa', borderWidth: 0 }] },
-    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { ticks: { font: { size: 9 }, maxTicksLimit: 10 } }, y: { ticks: { callback: v => '$' + (v/1000).toFixed(0) + 'K' } } } }
+    data: { labels, datasets: [{ label: 'Ventas', data: dias, backgroundColor: '#5a9a30aa', borderWidth: 0 }] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { ticks: { font: { size: 9 }, maxTicksLimit: 15 } }, y: { ticks: { callback: v => '$' + (v/1000).toFixed(0) + 'K' } } } }
   });
 }
 
 function renderChartGastosCat() {
+  const { prefix } = getPrefixFiltro();
+  const gastosFiltrados = gastos.filter(g => g.fecha.startsWith(prefix));
   const cats = {};
-  gastos.forEach(g => { cats[g.categoria] = (cats[g.categoria] || 0) + g.valor; });
+  gastosFiltrados.forEach(g => { cats[g.categoria] = (cats[g.categoria] || 0) + g.valor; });
   const ctx = document.getElementById('chart-gastos-cat').getContext('2d');
   if (chartGastosCat) chartGastosCat.destroy();
   chartGastosCat = new Chart(ctx, {
     type: 'doughnut',
-    data: { labels: Object.keys(cats), datasets: [{ data: Object.values(cats), backgroundColor: ['#3a6b1e','#5a9a30','#a0c878','#c8dfa0','#e0eecc','#2d5518','#7ab850'] }] },
+    data: { labels: Object.keys(cats).length ? Object.keys(cats) : ['Sin gastos'], datasets: [{ data: Object.values(cats).length ? Object.values(cats) : [1], backgroundColor: ['#3a6b1e','#5a9a30','#a0c878','#c8dfa0','#e0eecc','#2d5518','#7ab850'] }] },
     options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { font: { size: 11 } } } } }
   });
 }
@@ -1095,7 +1158,10 @@ function exportarCSV() {
 function init() {
   cargarDatos();
   const mes = new Date().getMonth();
+  const anio = new Date().getFullYear();
   document.getElementById('r-mes').value = mes;
+  document.getElementById('dash-mes').value = mes;
+  document.getElementById('dash-anio').value = anio;
   ['v-fecha','c-fecha','g-fecha'].forEach(id => document.getElementById(id).value = today());
   renderDashboard();
 }
