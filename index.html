@@ -199,12 +199,35 @@ input:focus, select:focus { border-color: var(--green2); box-shadow: 0 0 0 3px r
       <div class="form-group"><label>Precio Costo ($)</label><input id="inv-costo" type="number" placeholder="0"></div>
       <div class="form-group"><label>Precio Venta ($)</label><input id="inv-venta" type="number" placeholder="0"></div>
       <div class="form-group"><label>Cantidad</label><input id="inv-cant" type="number" placeholder="0"></div>
+      <div class="form-group"><label>Proveedor</label>
+        <select id="inv-proveedor-sel" onchange="autocompletarProveedorInv()">
+          <option value="">-- Seleccionar proveedor --</option>
+          <option value="__nuevo__">+ Nuevo proveedor</option>
+        </select>
+      </div>
+      <div class="form-group" id="inv-prov-nombre-wrap"><label>Nombre proveedor</label><input id="inv-prov-nombre" placeholder="Nombre o empresa"></div>
+      <div class="form-group"><label>Tel. proveedor</label><input id="inv-prov-tel" placeholder="3001234567"></div>
+      <div class="form-group"><label>Última cotización ($)</label><input id="inv-cotizacion" type="number" placeholder="Precio cotizado"></div>
     </div>
     <div class="form-actions">
       <button class="btn btn-primary" onclick="guardarProducto()">💾 Guardar</button>
       <button class="btn btn-secondary" onclick="cancelarEditInv()">Cancelar</button>
     </div>
   </div>
+
+  <!-- Proveedores registrados -->
+  <div class="table-wrap" style="margin-bottom:20px;">
+    <div class="table-header">
+      <h3>🏭 Proveedores registrados (<span id="prov-count">0</span>)</h3>
+      <button class="btn btn-secondary btn-sm" onclick="exportarCSVProveedores()">⬇ CSV proveedores</button>
+    </div>
+    <div style="overflow-x:auto;">
+      <table><thead><tr>
+        <th>Proveedor</th><th>Teléfono</th><th>Productos que vende</th><th>Mejor precio registrado</th><th>Acciones</th>
+      </tr></thead><tbody id="prov-tbody"></tbody></table>
+    </div>
+  </div>
+
   <div class="table-wrap">
     <div class="table-header">
       <h3>Productos (<span id="inv-count">0</span>)</h3>
@@ -215,7 +238,7 @@ input:focus, select:focus { border-color: var(--green2); box-shadow: 0 0 0 3px r
     </div>
     <div style="overflow-x:auto;">
       <table><thead><tr>
-        <th>Producto</th><th>Costo</th><th>Venta</th><th>Cant.</th><th>Margen</th><th>Val. Costo</th><th>Gan. Potencial</th><th>Acciones</th>
+        <th>Producto</th><th>Costo</th><th>Venta</th><th>Cant.</th><th>Margen</th><th>Proveedor</th><th>Cotización</th><th>Val. Costo</th><th>Gan. Potencial</th><th>Acciones</th>
       </tr></thead><tbody id="inv-tbody"></tbody></table>
     </div>
   </div>
@@ -593,7 +616,7 @@ const SEMILLA_COMPRAS = [
 ];
 
 // ==================== STATE ====================
-let inventario, ventas, gastos, compras, deudasClientes, deudasProveedores, saldoCaja, historial, clientes;
+let inventario, ventas, gastos, compras, clientes, proveedores, deudasClientes, deudasProveedores, saldoCaja, historial;
 
 function cargarDatos() {
   const inv = localStorage.getItem('inventario');
@@ -609,6 +632,7 @@ function cargarDatos() {
   saldoCaja = parseFloat(localStorage.getItem('saldoCaja') || '5000000');
   historial = JSON.parse(localStorage.getItem('historial') || '[]');
   clientes = JSON.parse(localStorage.getItem('clientes') || '[]');
+  proveedores = JSON.parse(localStorage.getItem('proveedores') || '[]');
 }
 
 function guardarTodo() {
@@ -621,6 +645,7 @@ function guardarTodo() {
   localStorage.setItem('saldoCaja', saldoCaja);
   localStorage.setItem('historial', JSON.stringify(historial));
   localStorage.setItem('clientes', JSON.stringify(clientes));
+  localStorage.setItem('proveedores', JSON.stringify(proveedores));
 }
 
 const fmt = v => '$' + Math.round(v || 0).toLocaleString('es-CO');
@@ -777,20 +802,34 @@ function renderInventario() {
   document.getElementById('inv-tbody').innerHTML = prods.map(p => {
     const margen = p.costo > 0 ? ((p.venta - p.costo) / p.costo * 100).toFixed(1) : 0;
     const ganPot = (p.venta - p.costo) * p.cantidad;
+    const provNombre = p.proveedorNombre || '—';
+    const provTel = p.proveedorTel || '';
+    const cotiz = p.cotizacion ? fmt(p.cotizacion) : '—';
+    const ahorroVsCotiz = p.cotizacion && p.costo > p.cotizacion ? fmt(p.costo - p.cotizacion) : null;
     return `<tr>
-      <td>${p.nombre}</td>
+      <td><b>${p.nombre}</b></td>
       <td class="num">${fmt(p.costo)}</td>
       <td class="num">${fmt(p.venta)}</td>
       <td class="num">${p.cantidad}</td>
       <td><span class="badge ${margen >= 30 ? 'badge-green' : margen >= 15 ? 'badge-blue' : 'badge-red'}">${margen}%</span></td>
+      <td>
+        ${provNombre !== '—' ? `<span style="font-size:12px;">${provNombre}</span>` : '<span style="color:var(--text3);font-size:12px;">—</span>'}
+        ${provTel ? `<br><a href="tel:${provTel}" style="font-size:11px;color:var(--green);">📞 ${provTel}</a>` : ''}
+      </td>
+      <td class="num">
+        ${cotiz}
+        ${ahorroVsCotiz ? `<br><span style="font-size:10px;color:var(--red);">Pagas ${ahorroVsCotiz} de más</span>` : ''}
+      </td>
       <td class="num">${fmt(p.costo * p.cantidad)}</td>
       <td class="num">${fmt(ganPot)}</td>
       <td>
-        <button class="btn btn-secondary btn-sm" onclick="editarProducto(${p.id})">✏</button>
-        <button class="btn btn-danger btn-sm" onclick="eliminarProducto(${p.id})">🗑</button>
+        <button class="btn btn-secondary btn-sm" onclick="editarProducto('${p.id}')">✏</button>
+        <button class="btn btn-danger btn-sm" onclick="eliminarProducto('${p.id}')">🗑</button>
       </td>
     </tr>`;
   }).join('');
+  renderProveedores();
+  poblarSelectProveedores();
 }
 
 function guardarProducto() {
@@ -799,6 +838,12 @@ function guardarProducto() {
   const costo = parseFloat(document.getElementById('inv-costo').value);
   const venta = parseFloat(document.getElementById('inv-venta').value);
   const cantidad = parseFloat(document.getElementById('inv-cant').value);
+  const provSel = document.getElementById('inv-proveedor-sel').value;
+  const provNombre = provSel === '__nuevo__' || !provSel
+    ? document.getElementById('inv-prov-nombre').value.trim()
+    : (proveedores.find(p => p.id === provSel) || {}).nombre || '';
+  const provTel = document.getElementById('inv-prov-tel').value.trim();
+  const cotizacion = parseFloat(document.getElementById('inv-cotizacion').value) || null;
 
   if (!nombre) return alert('❌ Escribe el nombre del producto');
   if (isNaN(costo) || costo < 0) return alert('❌ Ingresa el precio de costo');
@@ -806,28 +851,42 @@ function guardarProducto() {
   if (isNaN(cantidad) || cantidad < 0) return alert('❌ Ingresa la cantidad');
   if (venta < costo) { if (!confirm('⚠️ El precio de venta es menor al costo. ¿Continuar?')) return; }
 
+  // Registrar proveedor nuevo si aplica
+  if (provNombre && (provSel === '__nuevo__' || !provSel)) {
+    const yaExisteProv = proveedores.find(p => p.nombre.toLowerCase() === provNombre.toLowerCase());
+    if (!yaExisteProv) {
+      proveedores.push({ id: uid(), nombre: provNombre, telefono: provTel, productos: [nombre] });
+    } else {
+      if (!yaExisteProv.productos.includes(nombre)) yaExisteProv.productos.push(nombre);
+      if (provTel) yaExisteProv.telefono = provTel;
+    }
+  }
+
+  const datos = { nombre, costo, venta, cantidad, proveedorNombre: provNombre, proveedorTel: provTel, cotizacion };
   if (id) {
     const p = inventario.find(x => x.id == id);
-    if (p) Object.assign(p, { nombre, costo, venta, cantidad });
+    if (p) Object.assign(p, datos);
   } else {
     const yaExiste = inventario.find(p => p.nombre === nombre);
-    if (yaExiste) { if (!confirm('Ya existe "' + nombre + '". ¿Agregar como nuevo de todas formas?')) return; }
-    inventario.push({ id: uid(), nombre, costo, venta, cantidad });
+    if (yaExiste) { if (!confirm('Ya existe "' + nombre + '". ¿Agregar como nuevo?')) return; }
+    inventario.push({ id: uid(), ...datos });
   }
   cancelarEditInv(); guardarTodo(); renderInventario();
-
-  // Feedback visual
   const btn = document.querySelector('[onclick="guardarProducto()"]');
   if (btn) { const orig = btn.textContent; btn.textContent = '✅ Guardado'; setTimeout(() => btn.textContent = orig, 1500); }
 }
 
 function editarProducto(id) {
   const p = inventario.find(x => x.id == id);
+  if (!p) return;
   document.getElementById('inv-edit-id').value = p.id;
   document.getElementById('inv-nombre').value = p.nombre;
   document.getElementById('inv-costo').value = p.costo;
   document.getElementById('inv-venta').value = p.venta;
   document.getElementById('inv-cant').value = p.cantidad;
+  document.getElementById('inv-prov-nombre').value = p.proveedorNombre || '';
+  document.getElementById('inv-prov-tel').value = p.proveedorTel || '';
+  document.getElementById('inv-cotizacion').value = p.cotizacion || '';
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
@@ -838,7 +897,10 @@ function eliminarProducto(id) {
 }
 
 function cancelarEditInv() {
-  ['inv-edit-id','inv-nombre','inv-costo','inv-venta','inv-cant'].forEach(id => document.getElementById(id).value = '');
+  ['inv-edit-id','inv-nombre','inv-costo','inv-venta','inv-cant','inv-prov-nombre','inv-prov-tel','inv-cotizacion'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.value = '';
+  });
+  const sel = document.getElementById('inv-proveedor-sel'); if (sel) sel.value = '';
 }
 
 // ==================== VENTAS ====================
@@ -937,7 +999,7 @@ function guardarVenta() {
   } else {
     deudasClientes.push({ id: uid(), fecha, cliente: nombreCliente, prodNombre: prod.nombre, total, saldo: total, ventaId: venta.id });
   }
-  guardarTodo(); renderVentas();
+  guardarTodo(); renderVentas(); renderDashboard();
   ['v-prod','v-cant','v-precio','v-total','v-cliente','v-cliente-tel'].forEach(id => { const el = document.getElementById(id); if (el) el.value = id === 'v-cant' ? 1 : ''; });
   document.getElementById('v-cliente-sel').value = '';
 }
@@ -1478,7 +1540,80 @@ function marcarLlamado(id) {
   guardarTodo(); renderCRM();
 }
 
-// ==================== EXPORTAR / IMPORTAR CSV ====================
+// ==================== PROVEEDORES ====================
+function poblarSelectProveedores() {
+  const sel = document.getElementById('inv-proveedor-sel');
+  if (!sel) return;
+  sel.innerHTML = '<option value="">-- Seleccionar proveedor --</option><option value="__nuevo__">+ Nuevo proveedor</option>'
+    + proveedores.map(p => `<option value="${p.id}">${p.nombre}${p.telefono ? ' — ' + p.telefono : ''}</option>`).join('');
+}
+
+function autocompletarProveedorInv() {
+  const sel = document.getElementById('inv-proveedor-sel').value;
+  if (sel && sel !== '__nuevo__') {
+    const p = proveedores.find(x => x.id === sel);
+    if (p) {
+      document.getElementById('inv-prov-nombre').value = p.nombre;
+      document.getElementById('inv-prov-tel').value = p.telefono || '';
+    }
+  } else if (sel === '__nuevo__') {
+    document.getElementById('inv-prov-nombre').value = '';
+    document.getElementById('inv-prov-tel').value = '';
+  }
+}
+
+function renderProveedores() {
+  // Consolidar proveedores desde inventario también
+  inventario.forEach(p => {
+    if (p.proveedorNombre) {
+      const existe = proveedores.find(x => x.nombre.toLowerCase() === p.proveedorNombre.toLowerCase());
+      if (!existe) {
+        proveedores.push({ id: uid(), nombre: p.proveedorNombre, telefono: p.proveedorTel || '', productos: [p.nombre] });
+      } else {
+        if (!existe.productos.includes(p.nombre)) existe.productos.push(p.nombre);
+        if (p.proveedorTel && !existe.telefono) existe.telefono = p.proveedorTel;
+      }
+    }
+  });
+
+  const el = document.getElementById('prov-tbody');
+  if (!el) return;
+  document.getElementById('prov-count').textContent = proveedores.length;
+  el.innerHTML = proveedores.length ? proveedores.map(p => {
+    // Mejor precio registrado: mínimo cotizacion de sus productos
+    const susProductos = inventario.filter(x => x.proveedorNombre && x.proveedorNombre.toLowerCase() === p.nombre.toLowerCase());
+    const cotizaciones = susProductos.filter(x => x.cotizacion).map(x => ({ nombre: x.nombre, costo: x.costo, cotiz: x.cotizacion }));
+    return `<tr>
+      <td><b>${p.nombre}</b></td>
+      <td>${p.telefono ? `<a href="tel:${p.telefono}" style="color:var(--green);">📞 ${p.telefono}</a>` : '<span style="color:var(--text3)">—</span>'}</td>
+      <td style="font-size:12px;max-width:200px;">${p.productos.slice(0,4).join(', ')}${p.productos.length > 4 ? ' +' + (p.productos.length-4) + ' más' : ''}</td>
+      <td style="font-size:12px;">
+        ${cotizaciones.length ? cotizaciones.slice(0,2).map(c =>
+          `<div>${c.nombre.slice(0,20)}: <b>${fmt(c.cotiz)}</b>${c.costo > c.cotiz ? ' <span style="color:var(--red);font-size:10px;">↓ ${fmt(c.costo-c.cotiz)} menos</span>' : ''}</div>`
+        ).join('') : '—'}
+      </td>
+      <td>
+        ${p.telefono ? `<a href="tel:${p.telefono}" class="btn btn-primary btn-sm">📞 Llamar</a>` : ''}
+        <button class="btn btn-danger btn-sm" onclick="eliminarProveedor('${p.id}')">🗑</button>
+      </td>
+    </tr>`;
+  }).join('') : '<tr><td colspan="5" style="text-align:center;color:var(--text3);padding:16px;">Sin proveedores registrados — edita un producto para agregar uno</td></tr>';
+}
+
+function eliminarProveedor(id) {
+  if (!confirm('¿Eliminar este proveedor?')) return;
+  proveedores = proveedores.filter(p => p.id !== id);
+  guardarTodo(); renderInventario();
+}
+
+function exportarCSVProveedores() {
+  if (!proveedores.length) return alert('No hay proveedores registrados');
+  const filas = [
+    ['Proveedor','Teléfono','Productos','Notas'],
+    ...proveedores.map(p => [p.nombre, p.telefono||'', p.productos.join(' | '), p.notas||''])
+  ];
+  descargarCSV('surticampo_proveedores', filas);
+}
 function descargarCSV(nombre, filas) {
   const csv = filas.map(r => r.map(c => '"' + String(c||'').replace(/"/g,'""') + '"').join(',')).join('\n');
   const a = document.createElement('a');
